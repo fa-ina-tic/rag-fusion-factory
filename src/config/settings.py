@@ -9,39 +9,45 @@ from omegaconf import DictConfig, OmegaConf
 class ConfigManager:
     """Configuration manager using OmegaConf for YAML-based configuration."""
     
-    def __init__(self, config_dir: str = "config", environment: Optional[str] = None):
+    def __init__(self, config_dir: str = "config", environment: Optional[str] = None, config_file: Optional[str] = None):
         """
         Initialize configuration manager.
         
         Args:
             config_dir: Directory containing configuration files
             environment: Environment name (development, production, etc.)
+            config_file: Specific configuration file path (overrides config_dir)
         """
         self.config_dir = Path(config_dir)
+        self.config_file = Path(config_file) if config_file else None
         self.environment = environment or os.getenv("ENVIRONMENT", "default")
         self._config: Optional[DictConfig] = None
         self._load_config()
     
     def _load_config(self) -> None:
         """Load configuration from YAML files."""
-        # Load default configuration
-        default_config_path = self.config_dir / "default.yaml"
-        if not default_config_path.exists():
-            raise FileNotFoundError(f"Default configuration file not found: {default_config_path}")
-        
-        config = OmegaConf.load(default_config_path)
-        
-        # Load environment-specific configuration if it exists
-        env_config_path = self.config_dir / f"{self.environment}.yaml"
-        if env_config_path.exists():
-            env_config = OmegaConf.load(env_config_path)
-            config = OmegaConf.merge(config, env_config)
-        
-        # Load user-specific configuration if it exists
-        user_config_path = self.config_dir / "user.yaml"
-        if user_config_path.exists():
-            user_config = OmegaConf.load(user_config_path)
-            config = OmegaConf.merge(config, user_config)
+        if self.config_file and self.config_file.exists():
+            # Load from specific configuration file
+            config = OmegaConf.load(self.config_file)
+        else:
+            # Load default configuration
+            default_config_path = self.config_dir / "default.yaml"
+            if not default_config_path.exists():
+                raise FileNotFoundError(f"Default configuration file not found: {default_config_path}")
+            
+            config = OmegaConf.load(default_config_path)
+            
+            # Load environment-specific configuration if it exists
+            env_config_path = self.config_dir / f"{self.environment}.yaml"
+            if env_config_path.exists():
+                env_config = OmegaConf.load(env_config_path)
+                config = OmegaConf.merge(config, env_config)
+            
+            # Load user-specific configuration if it exists
+            user_config_path = self.config_dir / "user.yaml"
+            if user_config_path.exists():
+                user_config = OmegaConf.load(user_config_path)
+                config = OmegaConf.merge(config, user_config)
         
         # Override with environment variables
         config = self._apply_env_overrides(config)
