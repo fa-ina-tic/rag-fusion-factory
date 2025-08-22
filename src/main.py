@@ -1,6 +1,7 @@
 """Main application entry point for RAG Fusion Factory."""
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 from typing import Optional
@@ -8,8 +9,10 @@ from typing import Optional
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utils.logging import setup_logging, get_logger
-from config.settings import ConfigManager, get_api_config, get_logging_config
+from .utils.logging import setup_logging, get_logger
+from .config.settings import ConfigManager, get_api_config, get_logging_config
+from .services.fusion_factory import FusionFactory
+from .adapters.registry import get_adapter_registry
 
 
 class RAGFusionFactory:
@@ -48,6 +51,9 @@ class RAGFusionFactory:
         # Initialize logging with configuration
         self.logger = setup_logging()
         
+        # Initialize fusion factory
+        self.fusion_factory = None
+        
     def validate_configuration(self) -> bool:
         """
         Validate the loaded configuration.
@@ -64,8 +70,8 @@ class RAGFusionFactory:
                     return False
             
             # Validate API configuration
-            api_config = get_api_config()
-            if not isinstance(api_config.get('port'), int) or api_config['port'] <= 0:
+            api_config = self.config.api
+            if not isinstance(api_config.port, int) or api_config.port <= 0:
                 self.logger.error("Invalid API port configuration")
                 return False
             
@@ -92,9 +98,10 @@ class RAGFusionFactory:
     
     def log_configuration_info(self) -> None:
         """Log important configuration information."""
-        api_config = get_api_config()
-        self.logger.info(f"Configuration loaded: API will run on {api_config['host']}:{api_config['port']}")
-        self.logger.info(f"Debug mode: {api_config['debug']}")
+        # Use instance-specific configuration instead of global
+        api_config = self.config.api
+        self.logger.info(f"Configuration loaded: API will run on {api_config.host}:{api_config.port}")
+        self.logger.info(f"Debug mode: {api_config.debug}")
         self.logger.info(f"Model cache directory: {self.config.model.cache_dir}")
         self.logger.info(f"Default normalization method: {self.config.normalization.default_method}")
         self.logger.info(f"Environment: {self.environment or 'default'}")
@@ -107,9 +114,45 @@ class RAGFusionFactory:
         self.logger.info(f"Search timeout: {self.config.search.timeout}s")
         self.logger.info(f"Max concurrent engines: {self.config.search.max_concurrent_engines}")
     
-    def run(self) -> int:
+    async def process_sample_query(self, query: str = "sample query") -> None:
+        """Process a sample query to demonstrate fusion functionality.
+        
+        Args:
+            query: Sample query to process
         """
-        Run the RAG Fusion Factory application.
+        if not self.fusion_factory:
+            self.logger.error("Fusion factory not initialized")
+            return
+        
+        try:
+            # Get engine status
+            engine_status = self.fusion_factory.get_engine_status()
+            self.logger.info(f"Engine status: {engine_status}")
+            
+            # Check if any adapters are available
+            if engine_status['total_instances'] == 0:
+                self.logger.info("No search engine adapters configured - fusion factory ready but no engines available")
+                return
+            
+            # Perform health check
+            health_results = await self.fusion_factory.health_check_engines()
+            self.logger.info(f"Engine health check results: {health_results}")
+            
+            # Process sample query if engines are available and healthy
+            healthy_engines = [engine_id for engine_id, is_healthy in health_results.items() if is_healthy]
+            if healthy_engines:
+                self.logger.info(f"Processing sample query with {len(healthy_engines)} healthy engines")
+                results = await self.fusion_factory.process_query(query)
+                self.logger.info(f"Sample query processed: {results.total_results} results returned")
+            else:
+                self.logger.info("No healthy engines available for query processing")
+                
+        except Exception as e:
+            self.logger.error(f"Sample query processing failed: {e}")
+    
+    async def run_async(self) -> int:
+        """
+        Run the RAG Fusion Factory application asynchronously.
         
         Returns:
             Exit code (0 for success, non-zero for error)
@@ -125,20 +168,43 @@ class RAGFusionFactory:
             # Log configuration information
             self.log_configuration_info()
             
+            # Initialize fusion factory core engine
+            self.fusion_factory = FusionFactory()
+            self.logger.info("Fusion factory core engine initialized")
+            
+            # Initialize adapters from configuration if available
+            if hasattr(self.config, 'adapters') and self.config.adapters:
+                try:
+                    adapters = self.fusion_factory.initialize_adapters_from_config(self.config.adapters)
+                    self.logger.info(f"Initialized {len(adapters)} search engine adapters")
+                except Exception as e:
+                    self.logger.warning(f"Failed to initialize adapters from config: {e}")
+            
             # TODO: This will be expanded in future tasks to include:
             # - FastAPI server startup
-            # - Search engine initialization
             # - Model loading
             # - Training pipeline setup
             
             self.logger.info("RAG Fusion Factory initialized successfully")
-            self.logger.info("Application ready (core functionality will be added in subsequent tasks)")
+            self.logger.info("Core fusion engine ready for query processing")
+            
+            # Demonstrate fusion functionality with sample query
+            await self.process_sample_query("machine learning information retrieval")
             
             return 0
             
         except Exception as e:
             self.logger.error(f"Application startup failed: {e}")
             return 1
+    
+    def run(self) -> int:
+        """
+        Run the RAG Fusion Factory application.
+        
+        Returns:
+            Exit code (0 for success, non-zero for error)
+        """
+        return asyncio.run(self.run_async())
 
 
 def create_argument_parser() -> argparse.ArgumentParser:

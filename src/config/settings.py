@@ -26,17 +26,18 @@ class ConfigManager:
     
     def _load_config(self) -> None:
         """Load configuration from YAML files."""
+        # Always start with default configuration
+        default_config_path = self.config_dir / "default.yaml"
+        if not default_config_path.exists():
+            raise FileNotFoundError(f"Default configuration file not found: {default_config_path}")
+        
+        config = OmegaConf.load(default_config_path)
+        
         if self.config_file and self.config_file.exists():
-            # Load from specific configuration file
-            config = OmegaConf.load(self.config_file)
+            # Load and merge specific configuration file
+            specific_config = OmegaConf.load(self.config_file)
+            config = OmegaConf.merge(config, specific_config)
         else:
-            # Load default configuration
-            default_config_path = self.config_dir / "default.yaml"
-            if not default_config_path.exists():
-                raise FileNotFoundError(f"Default configuration file not found: {default_config_path}")
-            
-            config = OmegaConf.load(default_config_path)
-            
             # Load environment-specific configuration if it exists
             env_config_path = self.config_dir / f"{self.environment}.yaml"
             if env_config_path.exists():
@@ -80,7 +81,14 @@ class ConfigManager:
                 elif env_value.replace(".", "").isdigit():
                     env_value = float(env_value)
                 
-                OmegaConf.set(config, config_path, env_value)
+                # Use dot notation to set nested values
+                keys = config_path.split('.')
+                current = config
+                for key in keys[:-1]:
+                    if key not in current:
+                        current[key] = {}
+                    current = current[key]
+                current[keys[-1]] = env_value
         
         return config
     
