@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import logging
 
 from ..models.core import SearchResult, SearchResults
+from ..utils.error_handling import ErrorHandler, ErrorContext, get_error_handler
 
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class SearchEngineAdapter(ABC):
         self.timeout = timeout
         self._is_healthy = True
         self._last_health_check = None
+        self.error_handler = get_error_handler()
         
     @abstractmethod
     async def search(self, query: str, limit: int = 10, **kwargs) -> SearchResults:
@@ -109,13 +111,27 @@ class SearchEngineAdapter(ABC):
                 timeout=timeout
             )
         except asyncio.TimeoutError:
-            logger.error(f"Search timeout for engine {self.engine_id} after {timeout}s")
-            raise SearchEngineTimeoutError(
+            error_context = ErrorContext(
+                component="SearchEngineAdapter",
+                operation="search_with_timeout",
+                engine_id=self.engine_id,
+                query=query
+            )
+            timeout_error = SearchEngineTimeoutError(
                 f"Search operation timed out after {timeout} seconds"
             )
+            self.error_handler.handle_error(timeout_error, error_context)
+            raise timeout_error
         except Exception as e:
-            logger.error(f"Search error for engine {self.engine_id}: {str(e)}")
-            raise SearchEngineError(f"Search operation failed: {str(e)}") from e
+            error_context = ErrorContext(
+                component="SearchEngineAdapter",
+                operation="search_with_timeout",
+                engine_id=self.engine_id,
+                query=query
+            )
+            search_error = SearchEngineError(f"Search operation failed: {str(e)}")
+            self.error_handler.handle_error(search_error, error_context)
+            raise search_error from e
     
     async def health_check_with_timeout(self, timeout: Optional[float] = None) -> bool:
         """Perform health check with timeout handling.
@@ -137,11 +153,22 @@ class SearchEngineAdapter(ABC):
             self._last_health_check = datetime.now()
             return result
         except asyncio.TimeoutError:
-            logger.warning(f"Health check timeout for engine {self.engine_id}")
+            error_context = ErrorContext(
+                component="SearchEngineAdapter",
+                operation="health_check_with_timeout",
+                engine_id=self.engine_id
+            )
+            timeout_error = SearchEngineTimeoutError("Health check timed out")
+            self.error_handler.handle_error(timeout_error, error_context)
             self._is_healthy = False
             return False
         except Exception as e:
-            logger.error(f"Health check error for engine {self.engine_id}: {str(e)}")
+            error_context = ErrorContext(
+                component="SearchEngineAdapter",
+                operation="health_check_with_timeout",
+                engine_id=self.engine_id
+            )
+            self.error_handler.handle_error(e, error_context)
             self._is_healthy = False
             return False
     

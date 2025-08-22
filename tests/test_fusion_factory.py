@@ -407,10 +407,12 @@ class TestFusionFactory:
         
         results = await fusion_factory.process_query("test query", adapters)
         
-        # Should return empty results
+        # Should return fallback results due to graceful degradation
         assert isinstance(results, RankedResults)
-        assert results.total_results == 0
-        assert len(results.results) == 0
+        assert results.total_results >= 1  # Should have fallback results
+        assert len(results.results) >= 1
+        # Check if we got fallback results
+        assert results.results[0].metadata.get("fallback") is True
     
     @pytest.mark.asyncio
     async def test_health_check_engines(self, fusion_factory, mock_adapters):

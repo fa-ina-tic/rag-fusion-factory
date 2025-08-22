@@ -10,6 +10,13 @@ from ..models.core import SearchResults, NormalizedResults, RankedResults, Searc
 from ..adapters.base import SearchEngineAdapter, SearchEngineError
 from ..adapters.registry import AdapterRegistry, get_adapter_registry
 from ..config.settings import get_search_config, get_normalization_config
+from ..utils.error_handling import (
+    ErrorHandler, ErrorContext, ErrorCategory, CircuitBreakerConfig,
+    get_error_handler, FusionFactoryError
+)
+from ..utils.graceful_degradation import (
+    GracefulDegradationManager, DegradationConfig, get_degradation_manager
+)
 
 
 logger = logging.getLogger(__name__)
@@ -18,16 +25,22 @@ logger = logging.getLogger(__name__)
 class QueryDispatcher:
     """Handles concurrent querying to multiple search engines with fault tolerance."""
     
-    def __init__(self, max_concurrent_engines: int = 10, timeout: float = 30.0):
+    def __init__(self, max_concurrent_engines: int = 10, timeout: float = 30.0, 
+                 error_handler: Optional[ErrorHandler] = None):
         """Initialize the query dispatcher.
         
         Args:
             max_concurrent_engines: Maximum number of engines to query concurrently
             timeout: Default timeout for search operations
+            error_handler: Optional error handler instance
         """
         self.max_concurrent_engines = max_concurrent_engines
         self.timeout = timeout
+        self.error_handler = error_handler or get_error_handler()
         self._semaphore = None
+        
+        # Create circuit breakers for individual engines
+        self.engine_circuit_breakers: Dict[str, Any] = {}
     
     @property
     def semaphore(self):
@@ -84,7 +97,7 @@ class QueryDispatcher:
     
     async def _query_single_engine(self, adapter: SearchEngineAdapter, 
                                  query: str, limit: int) -> Optional[SearchResults]:
-        """Query a single search engine with semaphore control.
+        """Query a single search engine with semaphore control and circuit breaker protection.
         
         Args:
             adapter: Search engine adapter to query
@@ -95,14 +108,54 @@ class QueryDispatcher:
             SearchResults if successful, None if failed
         """
         async with self.semaphore:
+            # Get or create circuit breaker for this engine
+            circuit_breaker = self._get_engine_circuit_breaker(adapter.engine_id)
+            
             try:
-                return await adapter.search_with_timeout(query, limit, self.timeout)
+                # Use circuit breaker to protect the query
+                return await circuit_breaker.call(
+                    adapter.search_with_timeout, query, limit, self.timeout
+                )
             except SearchEngineError as e:
-                logger.error(f"Search engine error for {adapter.engine_id}: {e}")
+                error_context = ErrorContext(
+                    component="QueryDispatcher",
+                    operation="query_single_engine",
+                    engine_id=adapter.engine_id,
+                    query=query
+                )
+                self.error_handler.handle_error(e, error_context)
                 return None
             except Exception as e:
-                logger.error(f"Unexpected error for {adapter.engine_id}: {e}")
+                error_context = ErrorContext(
+                    component="QueryDispatcher",
+                    operation="query_single_engine",
+                    engine_id=adapter.engine_id,
+                    query=query
+                )
+                self.error_handler.handle_error(e, error_context)
                 return None
+    
+    def _get_engine_circuit_breaker(self, engine_id: str):
+        """Get or create circuit breaker for specific engine.
+        
+        Args:
+            engine_id: Engine identifier
+            
+        Returns:
+            Circuit breaker instance for the engine
+        """
+        if engine_id not in self.engine_circuit_breakers:
+            cb_config = CircuitBreakerConfig(
+                failure_threshold=3,
+                recovery_timeout=30,
+                expected_exception=SearchEngineError,
+                name=f"engine_{engine_id}"
+            )
+            self.engine_circuit_breakers[engine_id] = self.error_handler.create_circuit_breaker(
+                f"engine_{engine_id}", cb_config
+            )
+        
+        return self.engine_circuit_breakers[engine_id]
 
 
 class ScoreNormalizer:
@@ -352,10 +405,26 @@ class FusionFactory:
         search_config = get_search_config()
         normalization_config = get_normalization_config()
         
+        # Initialize error handling
+        self.error_handler = get_error_handler()
+        
+        # Initialize graceful degradation
+        degradation_config = DegradationConfig(
+            min_engines_required=search_config.get('min_engines_required', 1),
+            min_results_threshold=search_config.get('min_results_threshold', 5),
+            enable_fallback_results=search_config.get('enable_fallback_results', True),
+            fallback_timeout=search_config.get('fallback_timeout', 10.0),
+            quality_threshold=search_config.get('quality_threshold', 0.3),
+            enable_cached_results=search_config.get('enable_cached_results', True),
+            cache_expiry_minutes=search_config.get('cache_expiry_minutes', 30)
+        )
+        self.degradation_manager = get_degradation_manager(degradation_config)
+        
         # Initialize components
         self.query_dispatcher = QueryDispatcher(
             max_concurrent_engines=search_config.get('max_concurrent_engines', 10),
-            timeout=search_config.get('timeout', 30.0)
+            timeout=search_config.get('timeout', 30.0),
+            error_handler=self.error_handler
         )
         
         self.score_normalizer = ScoreNormalizer(
@@ -365,7 +434,34 @@ class FusionFactory:
         
         self.fusion_engine = ResultFusionEngine()
         
-        logger.info("FusionFactory initialized successfully")
+        # Create circuit breakers for critical operations
+        self._setup_circuit_breakers()
+        
+        logger.info("FusionFactory initialized successfully with error handling and graceful degradation")
+    
+    def _setup_circuit_breakers(self) -> None:
+        """Set up circuit breakers for critical operations."""
+        # Circuit breaker for query processing
+        query_cb_config = CircuitBreakerConfig(
+            failure_threshold=5,
+            recovery_timeout=60,
+            expected_exception=Exception,
+            name="query_processing"
+        )
+        self.query_circuit_breaker = self.error_handler.create_circuit_breaker(
+            "query_processing", query_cb_config
+        )
+        
+        # Circuit breaker for adapter initialization
+        adapter_cb_config = CircuitBreakerConfig(
+            failure_threshold=3,
+            recovery_timeout=30,
+            expected_exception=Exception,
+            name="adapter_initialization"
+        )
+        self.adapter_circuit_breaker = self.error_handler.create_circuit_breaker(
+            "adapter_initialization", adapter_cb_config
+        )
     
     def initialize_adapters_from_config(self, adapters_config: List[Dict[str, Any]]) -> List[SearchEngineAdapter]:
         """Initialize search engine adapters from configuration.
@@ -386,7 +482,7 @@ class FusionFactory:
     
     async def process_query(self, query: str, adapters: Optional[List[SearchEngineAdapter]] = None,
                           weights: Optional[np.ndarray] = None, limit: int = 10) -> RankedResults:
-        """Process a query through the complete fusion pipeline.
+        """Process a query through the complete fusion pipeline with error handling and graceful degradation.
         
         Args:
             query: Search query string
@@ -410,32 +506,88 @@ class FusionFactory:
         logger.info(f"Processing query: '{query}' with {len(adapters)} engines")
         
         try:
-            # Step 1: Dispatch query to all engines
-            search_results = await self.query_dispatcher.dispatch_query(query, adapters, limit)
-            
-            if not search_results:
-                logger.warning("No search results returned from any engine")
-                return RankedResults(
-                    query=query,
-                    results=[],
-                    fusion_weights=np.array([]),
-                    confidence_scores=[],
-                    timestamp=datetime.now(),
-                    total_results=0
-                )
-            
-            # Step 2: Normalize scores
-            normalized_results = self.score_normalizer.normalize_scores(search_results)
-            
-            # Step 3: Fuse results
-            fused_results = self.fusion_engine.fuse_results(normalized_results, weights)
-            
-            logger.info(f"Query processing completed: {fused_results.total_results} results")
-            return fused_results
+            # Use circuit breaker for query processing
+            return await self.query_circuit_breaker.call(
+                self._process_query_internal, query, adapters, weights, limit
+            )
             
         except Exception as e:
-            logger.error(f"Query processing failed: {e}")
-            raise
+            error_context = ErrorContext(
+                component="FusionFactory",
+                operation="process_query",
+                query=query,
+                additional_data={"num_adapters": len(adapters)}
+            )
+            self.error_handler.handle_error(e, error_context)
+            
+            # Try graceful degradation
+            try:
+                available_engines = [adapter.engine_id for adapter in adapters if adapter.is_healthy]
+                return await self.degradation_manager.handle_degraded_query(
+                    query, available_engines, fusion_engine=self.fusion_engine
+                )
+            except Exception as degradation_error:
+                logger.error(f"Graceful degradation also failed: {degradation_error}")
+                raise FusionFactoryError(
+                    f"Query processing failed and graceful degradation unsuccessful: {str(e)}"
+                ) from e
+    
+    async def _process_query_internal(self, query: str, adapters: List[SearchEngineAdapter],
+                                    weights: Optional[np.ndarray], limit: int) -> RankedResults:
+        """Internal query processing method with error handling.
+        
+        Args:
+            query: Search query string
+            adapters: List of search engine adapters
+            weights: Optional fusion weights
+            limit: Maximum number of results per engine
+            
+        Returns:
+            RankedResults with fused and ranked results
+        """
+        # Step 1: Check if we should enter degraded mode
+        healthy_engines = sum(1 for adapter in adapters if adapter.is_healthy)
+        total_engines = len(adapters)
+        
+        if self.degradation_manager.should_degrade(total_engines, healthy_engines):
+            logger.warning("Entering degraded mode for query processing")
+            available_engines = [adapter.engine_id for adapter in adapters if adapter.is_healthy]
+            return await self.degradation_manager.handle_degraded_query(
+                query, available_engines, fusion_engine=self.fusion_engine
+            )
+        
+        # Step 2: Dispatch query to all engines
+        search_results = await self.query_dispatcher.dispatch_query(query, adapters, limit)
+        
+        if not search_results:
+            logger.warning("No search results returned from any engine")
+            # Try graceful degradation
+            available_engines = [adapter.engine_id for adapter in adapters if adapter.is_healthy]
+            return await self.degradation_manager.handle_degraded_query(
+                query, available_engines, fusion_engine=self.fusion_engine
+            )
+        
+        # Step 3: Check if we have sufficient results for normal processing
+        total_results = sum(len(results.results) for results in search_results.values())
+        if total_results < self.degradation_manager.config.min_results_threshold:
+            logger.warning(f"Insufficient results ({total_results}), attempting graceful degradation")
+            available_engines = list(search_results.keys())
+            return await self.degradation_manager.handle_degraded_query(
+                query, available_engines, partial_results=search_results, fusion_engine=self.fusion_engine
+            )
+        
+        # Step 4: Normalize scores
+        normalized_results = self.score_normalizer.normalize_scores(search_results)
+        
+        # Step 5: Fuse results
+        fused_results = self.fusion_engine.fuse_results(normalized_results, weights)
+        
+        # Step 6: Cache successful results for future fallback
+        available_engines = list(search_results.keys())
+        self.degradation_manager.cache_successful_results(query, fused_results, available_engines)
+        
+        logger.info(f"Query processing completed: {fused_results.total_results} results")
+        return fused_results
     
     async def health_check_engines(self) -> Dict[str, bool]:
         """Perform health checks on all registered engines.
@@ -460,3 +612,75 @@ class FusionFactory:
             List of available engine type names
         """
         return self.adapter_registry.get_available_adapters()
+    
+    def get_error_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive error statistics and circuit breaker states.
+        
+        Returns:
+            Dictionary containing error statistics
+        """
+        return {
+            "error_handler_stats": self.error_handler.get_error_statistics(),
+            "degradation_status": self.degradation_manager.get_degradation_status(),
+            "query_dispatcher_circuit_breakers": {
+                engine_id: cb.get_state()
+                for engine_id, cb in self.query_dispatcher.engine_circuit_breakers.items()
+            }
+        }
+    
+    def reset_error_statistics(self) -> None:
+        """Reset all error statistics and circuit breakers."""
+        self.error_handler.reset_statistics()
+        
+        # Reset circuit breakers
+        for cb in self.error_handler.circuit_breakers.values():
+            cb.reset()
+        
+        logger.info("Error statistics and circuit breakers reset")
+    
+    def configure_degradation(self, config: DegradationConfig) -> None:
+        """Update graceful degradation configuration.
+        
+        Args:
+            config: New degradation configuration
+        """
+        self.degradation_manager = GracefulDegradationManager(config)
+        logger.info("Graceful degradation configuration updated")
+    
+    async def test_engine_resilience(self, engine_id: str, num_failures: int = 3) -> Dict[str, Any]:
+        """Test engine resilience by simulating failures.
+        
+        Args:
+            engine_id: Engine to test
+            num_failures: Number of failures to simulate
+            
+        Returns:
+            Dictionary containing test results
+        """
+        adapter = self.adapter_registry.get_adapter(engine_id)
+        if not adapter:
+            return {"error": f"Engine {engine_id} not found"}
+        
+        circuit_breaker = self.query_dispatcher._get_engine_circuit_breaker(engine_id)
+        initial_state = circuit_breaker.get_state()
+        
+        # Simulate failures
+        for i in range(num_failures):
+            try:
+                await circuit_breaker.call(self._simulate_failure)
+            except Exception:
+                pass  # Expected to fail
+        
+        final_state = circuit_breaker.get_state()
+        
+        return {
+            "engine_id": engine_id,
+            "initial_state": initial_state,
+            "final_state": final_state,
+            "failures_simulated": num_failures,
+            "circuit_breaker_opened": final_state["state"] == "open"
+        }
+    
+    async def _simulate_failure(self) -> None:
+        """Simulate a failure for testing purposes."""
+        raise SearchEngineError("Simulated failure for testing")
