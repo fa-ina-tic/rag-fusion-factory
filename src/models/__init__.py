@@ -9,6 +9,7 @@ from .core import (
     RankedResults,
     TrainingPair,
 )
+from .weight_predictor import WeightPredictorModel
 
 __all__ = [
     "SearchResult",
@@ -18,4 +19,5 @@ __all__ = [
     "NormalizedResults",
     "RankedResults",
     "TrainingPair",
+    "WeightPredictorModel",
 ]
