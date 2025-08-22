@@ -2,6 +2,8 @@
 
 **Intelligent Search Result Fusion with Automated Weight Optimization**
 
+### Trying Vibe Coding to check my Theory : Fine-tuning weights using simple XGBoost on hybrid search(for Convex Combination) would allow us to find optimal weights while making the finetuning process much easier.
+
 RAG Fusion Factory는 여러 검색 엔진의 결과를 지능적으로 융합하여 최적의 검색 성능을 달성하는 시스템입니다. 머신러닝 기반의 자동화된 가중치 최적화와 대조 학습(Contrastive Learning)을 통해 도메인별 최적의 검색 결과 조합을 찾아줍니다.
 
 ## 🎯 주요 기능
