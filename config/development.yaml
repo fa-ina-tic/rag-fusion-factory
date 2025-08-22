@@ -1,0 +1,26 @@
+# Development Environment Configuration
+# This file overrides default.yaml settings for development
+
+api:
+  debug: true
+  reload: true
+  port: 8001
+
+logging:
+  level: "DEBUG"
+  file_logging: true
+
+model:
+  xgboost:
+    n_estimators: 50  # Smaller for faster training during development
+
+training:
+  batch_size: 16  # Smaller batch size for development
+  max_epochs: 20
+
+hyperparameter_optimization:
+  max_trials: 10  # Fewer trials for faster development cycles
+  timeout: 600  # 10 minutes
+
+monitoring:
+  memory_profiling: true

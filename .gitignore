@@ -6,6 +6,14 @@ __pycache__/
 # C extensions
 *.so
 
+# for IDE
+.vscode
+.cursor
+.kiro
+
+# formatter
+.trunk
+
 # Distribution / packaging
 .Python
 build/
@@ -135,7 +143,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+./.env
 .envrc
 .venv
 env/

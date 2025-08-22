@@ -1,0 +1,35 @@
+# User-specific Configuration Template
+# Copy this file to user.yaml and customize as needed
+# This file overrides both default.yaml and environment-specific configurations
+
+# Example: Override API settings
+# api:
+#   host: "localhost"
+#   port: 8080
+#   debug: true
+
+# Example: Override model settings
+# model:
+#   cache_dir: "/custom/model/path"
+#   xgboost:
+#     n_estimators: 150
+#     learning_rate: 0.05
+
+# Example: Override logging settings
+# logging:
+#   level: "DEBUG"
+#   file_logging: true
+#   log_file: "/custom/log/path/app.log"
+
+# Example: Override training settings
+# training:
+#   batch_size: 64
+#   validation_split: 0.15
+#   contrastive_learning:
+#     margin: 1.5
+#     temperature: 0.2
+
+# Example: Override search settings
+# search:
+#   timeout: 45.0
+#   max_concurrent_engines: 15
