@@ -67,15 +67,14 @@ def create_user_config_from_template() -> None:
         print(f"Created user configuration file: {user_config_path}")
 
 
-def update_user_config(updates: Dict[str, Any]) -> None:
+def get_user_config_path() -> Path:
     """
-    Update user configuration with new values.
+    Get the path to the user configuration file.
     
-    Args:
-        updates: Dictionary of configuration updates
+    Returns:
+        Path to user.yaml file
     """
-    config_manager.save_user_config(updates)
-    print("User configuration updated successfully")
+    return Path("config") / "user.yaml"
 
 
 def print_config_summary() -> None:
@@ -113,19 +112,29 @@ def export_config_to_file(output_path: str, format: str = "yaml") -> None:
     print(f"Configuration exported to: {output_path}")
 
 
-def load_config_from_dict(config_dict: Dict[str, Any]) -> None:
+def show_config_edit_instructions() -> None:
     """
-    Load configuration from a dictionary.
-    
-    Args:
-        config_dict: Configuration dictionary
+    Show instructions for editing configuration files.
     """
-    temp_config = OmegaConf.create(config_dict)
-    merged_config = OmegaConf.merge(config, temp_config)
-    
-    # Update the global config
-    config_manager._config = merged_config
-    print("Configuration loaded from dictionary")
+    print("=== Configuration Edit Instructions ===")
+    print("Configuration can only be changed by editing YAML files directly:")
+    print("")
+    print("1. Edit environment-specific config:")
+    print("   - config/development.yaml")
+    print("   - config/production.yaml")
+    print("")
+    print("2. Create/edit user-specific config:")
+    print("   - config/user.yaml")
+    print("")
+    print("3. Set environment variables:")
+    print("   - RAG_API_HOST=localhost")
+    print("   - RAG_API_PORT=8080")
+    print("   - RAG_LOG_LEVEL=DEBUG")
+    print("")
+    print("4. Reload configuration:")
+    print("   - Restart the application")
+    print("   - Or call config_manager.reload() in code")
+    print("=" * 50)
 
 
 def get_config_value(key_path: str, default: Any = None) -> Any:
@@ -142,13 +151,40 @@ def get_config_value(key_path: str, default: Any = None) -> Any:
     return config_manager.get(key_path, default)
 
 
-def set_config_value(key_path: str, value: Any) -> None:
+def suggest_config_edit(key_path: str, value: Any) -> None:
     """
-    Set a configuration value using dot notation.
+    Suggest how to edit configuration for a specific key-value pair.
     
     Args:
         key_path: Configuration key path (e.g., 'api.host')
-        value: Value to set
+        value: Desired value
     """
-    config_manager.set(key_path, value)
-    print(f"Configuration updated: {key_path} = {value}")
+    print(f"To set {key_path} = {value}:")
+    print("")
+    
+    # Convert dot notation to YAML structure
+    keys = key_path.split(".")
+    yaml_structure = ""
+    indent = ""
+    
+    for i, key in enumerate(keys):
+        yaml_structure += f"{indent}{key}:"
+        if i == len(keys) - 1:
+            # Last key - add the value
+            if isinstance(value, str):
+                yaml_structure += f' "{value}"'
+            else:
+                yaml_structure += f" {value}"
+        yaml_structure += "\n"
+        indent += "  "
+    
+    print("Add this to config/user.yaml:")
+    print("```yaml")
+    print(yaml_structure.rstrip())
+    print("```")
+    print("")
+    print("Or set environment variable:")
+    env_var = f"RAG_{key_path.upper().replace('.', '_')}"
+    print(f"export {env_var}={value}")
+    print("")
+    print("Then restart the application or call config_manager.reload()")

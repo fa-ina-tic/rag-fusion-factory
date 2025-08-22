@@ -81,13 +81,21 @@ python scripts/config_manager.py export config_dump.yaml
 python scripts/config_manager.py export config_dump.json --format json
 ```
 
-### Updating Configuration
+### Editing Configuration
+
+Configuration can only be changed by editing YAML files directly:
 
 ```bash
-# Update user configuration via CLI
-python scripts/config_manager.py update api.port 8080
-python scripts/config_manager.py update model.xgboost.n_estimators 200
-python scripts/config_manager.py update logging.level DEBUG
+# Get editing instructions
+python scripts/config_manager.py instructions
+
+# Get specific editing guidance
+python scripts/config_manager.py edit --key api.port --value 8080
+python scripts/config_manager.py edit --key model.xgboost.n_estimators --value 200
+
+# Edit files directly
+vim config/user.yaml
+vim config/development.yaml
 ```
 
 ## Configuration Sections

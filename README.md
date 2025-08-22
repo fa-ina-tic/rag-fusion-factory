@@ -145,9 +145,9 @@ python3 scripts/config_manager.py validate
 # 설정 요약 보기
 python3 scripts/config_manager.py summary
 
-# 사용자 설정 업데이트
-python3 scripts/config_manager.py update api.port 8080
-python3 scripts/config_manager.py update model.xgboost.n_estimators 200
+# 설정 편집 가이드 보기
+python3 scripts/config_manager.py edit --key api.port --value 8080
+python3 scripts/config_manager.py instructions
 
 # 환경 변경
 python3 scripts/config_manager.py env --set production

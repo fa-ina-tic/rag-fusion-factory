@@ -13,9 +13,11 @@ from src.config.utils import (
     print_config_summary,
     export_config_to_file,
     create_user_config_from_template,
-    update_user_config,
     get_environment,
     set_environment,
+    show_config_edit_instructions,
+    suggest_config_edit,
+    get_user_config_path,
 )
 
 
@@ -43,10 +45,13 @@ def main():
     env_parser.add_argument("--get", action="store_true", help="Get current environment")
     env_parser.add_argument("--set", help="Set environment")
     
-    # Update command
-    update_parser = subparsers.add_parser("update", help="Update user configuration")
-    update_parser.add_argument("key", help="Configuration key (dot notation)")
-    update_parser.add_argument("value", help="Configuration value")
+    # Edit command
+    edit_parser = subparsers.add_parser("edit", help="Show how to edit configuration")
+    edit_parser.add_argument("--key", help="Configuration key to get edit instructions for")
+    edit_parser.add_argument("--value", help="Desired value (used with --key)")
+    
+    # Instructions command
+    subparsers.add_parser("instructions", help="Show configuration editing instructions")
     
     args = parser.parse_args()
     
@@ -80,26 +85,33 @@ def main():
             else:
                 print(f"Current environment: {get_environment()}")
         
-        elif args.command == "update":
-            # Parse value type
-            value = args.value
-            if value.lower() in ("true", "false"):
-                value = value.lower() == "true"
-            elif value.isdigit():
-                value = int(value)
-            elif value.replace(".", "").isdigit():
-                value = float(value)
-            
-            # Create nested dictionary for the update
-            keys = args.key.split(".")
-            update_dict = {}
-            current = update_dict
-            for key in keys[:-1]:
-                current[key] = {}
-                current = current[key]
-            current[keys[-1]] = value
-            
-            update_user_config(update_dict)
+        elif args.command == "edit":
+            if args.key and args.value:
+                # Parse value type
+                value = args.value
+                if value.lower() in ("true", "false"):
+                    value = value.lower() == "true"
+                elif value.isdigit():
+                    value = int(value)
+                elif value.replace(".", "").isdigit():
+                    value = float(value)
+                
+                suggest_config_edit(args.key, value)
+            elif args.key:
+                current_value = get_config_value(args.key)
+                print(f"Current value of {args.key}: {current_value}")
+                print("")
+                suggest_config_edit(args.key, "<new_value>")
+            else:
+                user_config_path = get_user_config_path()
+                print(f"Edit configuration files:")
+                print(f"  User config: {user_config_path}")
+                print(f"  Environment configs: config/development.yaml, config/production.yaml")
+                print("")
+                print("Use 'config_manager.py edit --key <key> --value <value>' for specific guidance")
+        
+        elif args.command == "instructions":
+            show_config_edit_instructions()
     
     except Exception as e:
         print(f"Error: {e}")

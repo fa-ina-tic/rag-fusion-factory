@@ -105,41 +105,15 @@ class ConfigManager:
         except Exception:
             return default
     
-    def set(self, key: str, value: Any) -> None:
+    def is_read_only(self) -> bool:
         """
-        Set configuration value by dot-notation key.
+        Check if configuration is read-only.
+        Configuration changes should only be made by editing YAML files directly.
         
-        Args:
-            key: Configuration key in dot notation
-            value: Value to set
+        Returns:
+            Always True - configuration is read-only at runtime
         """
-        OmegaConf.set(self.config, key, value)
-    
-    def save_user_config(self, config_updates: Dict[str, Any]) -> None:
-        """
-        Save user-specific configuration updates.
-        
-        Args:
-            config_updates: Dictionary of configuration updates
-        """
-        user_config_path = self.config_dir / "user.yaml"
-        
-        # Load existing user config or create empty
-        if user_config_path.exists():
-            user_config = OmegaConf.load(user_config_path)
-        else:
-            user_config = OmegaConf.create({})
-        
-        # Merge updates
-        updates_config = OmegaConf.create(config_updates)
-        user_config = OmegaConf.merge(user_config, updates_config)
-        
-        # Save to file
-        user_config_path.parent.mkdir(parents=True, exist_ok=True)
-        OmegaConf.save(user_config, user_config_path)
-        
-        # Reload configuration
-        self.reload()
+        return True
 
 
 # Global configuration manager instance
