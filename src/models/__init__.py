@@ -10,6 +10,7 @@ from .core import (
     TrainingPair,
 )
 from .weight_predictor import WeightPredictorModel
+from .contrastive_learning import ContrastiveLearningModule
 
 __all__ = [
     "SearchResult",
@@ -20,4 +21,5 @@ __all__ = [
     "RankedResults",
     "TrainingPair",
     "WeightPredictorModel",
+    "ContrastiveLearningModule",
 ]
