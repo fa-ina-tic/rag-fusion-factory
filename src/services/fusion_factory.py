@@ -17,26 +17,31 @@ from ..utils.error_handling import (
 from ..utils.graceful_degradation import (
     GracefulDegradationManager, DegradationConfig, get_degradation_manager
 )
+from ..utils.monitoring import get_performance_monitor
+from ..utils.logging import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class QueryDispatcher:
     """Handles concurrent querying to multiple search engines with fault tolerance."""
     
     def __init__(self, max_concurrent_engines: int = 10, timeout: float = 30.0, 
-                 error_handler: Optional[ErrorHandler] = None):
+                 error_handler: Optional[ErrorHandler] = None,
+                 performance_monitor: Optional[Any] = None):
         """Initialize the query dispatcher.
         
         Args:
             max_concurrent_engines: Maximum number of engines to query concurrently
             timeout: Default timeout for search operations
             error_handler: Optional error handler instance
+            performance_monitor: Optional performance monitor instance
         """
         self.max_concurrent_engines = max_concurrent_engines
         self.timeout = timeout
         self.error_handler = error_handler or get_error_handler()
+        self.performance_monitor = performance_monitor or get_performance_monitor()
         self._semaphore = None
         
         # Create circuit breakers for individual engines
@@ -111,29 +116,63 @@ class QueryDispatcher:
             # Get or create circuit breaker for this engine
             circuit_breaker = self._get_engine_circuit_breaker(adapter.engine_id)
             
-            try:
-                # Use circuit breaker to protect the query
-                return await circuit_breaker.call(
-                    adapter.search_with_timeout, query, limit, self.timeout
-                )
-            except SearchEngineError as e:
-                error_context = ErrorContext(
-                    component="QueryDispatcher",
-                    operation="query_single_engine",
-                    engine_id=adapter.engine_id,
-                    query=query
-                )
-                self.error_handler.handle_error(e, error_context)
-                return None
-            except Exception as e:
-                error_context = ErrorContext(
-                    component="QueryDispatcher",
-                    operation="query_single_engine",
-                    engine_id=adapter.engine_id,
-                    query=query
-                )
-                self.error_handler.handle_error(e, error_context)
-                return None
+            # Measure engine response time
+            async with self.performance_monitor.measure_async_operation(
+                f"engine_query_{adapter.engine_id}",
+                labels={"engine_id": adapter.engine_id, "query": query[:50]}
+            ):
+                try:
+                    # Use circuit breaker to protect the query
+                    result = await circuit_breaker.call(
+                        adapter.search_with_timeout, query, limit, self.timeout
+                    )
+                    
+                    # Record successful engine metrics
+                    if result:
+                        self.performance_monitor.record_engine_metrics(
+                            adapter.engine_id, 
+                            response_time=0.0,  # Will be measured by context manager
+                            success=True,
+                            result_count=len(result.results)
+                        )
+                    
+                    return result
+                    
+                except SearchEngineError as e:
+                    error_context = ErrorContext(
+                        component="QueryDispatcher",
+                        operation="query_single_engine",
+                        engine_id=adapter.engine_id,
+                        query=query
+                    )
+                    self.error_handler.handle_error(e, error_context)
+                    
+                    # Record failed engine metrics
+                    self.performance_monitor.record_engine_metrics(
+                        adapter.engine_id,
+                        response_time=0.0,  # Will be measured by context manager
+                        success=False,
+                        result_count=0
+                    )
+                    return None
+                    
+                except Exception as e:
+                    error_context = ErrorContext(
+                        component="QueryDispatcher",
+                        operation="query_single_engine",
+                        engine_id=adapter.engine_id,
+                        query=query
+                    )
+                    self.error_handler.handle_error(e, error_context)
+                    
+                    # Record failed engine metrics
+                    self.performance_monitor.record_engine_metrics(
+                        adapter.engine_id,
+                        response_time=0.0,  # Will be measured by context manager
+                        success=False,
+                        result_count=0
+                    )
+                    return None
     
     def _get_engine_circuit_breaker(self, engine_id: str):
         """Get or create circuit breaker for specific engine.
@@ -408,6 +447,9 @@ class FusionFactory:
         # Initialize error handling
         self.error_handler = get_error_handler()
         
+        # Initialize performance monitoring
+        self.performance_monitor = get_performance_monitor()
+        
         # Initialize graceful degradation
         degradation_config = DegradationConfig(
             min_engines_required=search_config.get('min_engines_required', 1),
@@ -424,7 +466,8 @@ class FusionFactory:
         self.query_dispatcher = QueryDispatcher(
             max_concurrent_engines=search_config.get('max_concurrent_engines', 10),
             timeout=search_config.get('timeout', 30.0),
-            error_handler=self.error_handler
+            error_handler=self.error_handler,
+            performance_monitor=self.performance_monitor
         )
         
         self.score_normalizer = ScoreNormalizer(
@@ -437,7 +480,7 @@ class FusionFactory:
         # Create circuit breakers for critical operations
         self._setup_circuit_breakers()
         
-        logger.info("FusionFactory initialized successfully with error handling and graceful degradation")
+        logger.info("FusionFactory initialized successfully with error handling, graceful degradation, and performance monitoring")
     
     def _setup_circuit_breakers(self) -> None:
         """Set up circuit breakers for critical operations."""
@@ -505,32 +548,54 @@ class FusionFactory:
         
         logger.info(f"Processing query: '{query}' with {len(adapters)} engines")
         
-        try:
-            # Use circuit breaker for query processing
-            return await self.query_circuit_breaker.call(
-                self._process_query_internal, query, adapters, weights, limit
-            )
-            
-        except Exception as e:
-            error_context = ErrorContext(
-                component="FusionFactory",
-                operation="process_query",
-                query=query,
-                additional_data={"num_adapters": len(adapters)}
-            )
-            self.error_handler.handle_error(e, error_context)
-            
-            # Try graceful degradation
+        # Measure overall query processing time
+        async with self.performance_monitor.measure_async_operation(
+            "fusion_query_processing",
+            labels={"query": query[:50], "num_engines": str(len(adapters))}
+        ):
             try:
-                available_engines = [adapter.engine_id for adapter in adapters if adapter.is_healthy]
-                return await self.degradation_manager.handle_degraded_query(
-                    query, available_engines, fusion_engine=self.fusion_engine
+                # Use circuit breaker for query processing
+                result = await self.query_circuit_breaker.call(
+                    self._process_query_internal, query, adapters, weights, limit
                 )
-            except Exception as degradation_error:
-                logger.error(f"Graceful degradation also failed: {degradation_error}")
-                raise FusionFactoryError(
-                    f"Query processing failed and graceful degradation unsuccessful: {str(e)}"
-                ) from e
+                
+                # Record successful query metrics
+                self.performance_monitor.metrics_collector.increment_counter("queries_successful")
+                self.performance_monitor.metrics_collector.record_metric(
+                    "query_result_count", result.total_results
+                )
+                
+                return result
+                
+            except Exception as e:
+                error_context = ErrorContext(
+                    component="FusionFactory",
+                    operation="process_query",
+                    query=query,
+                    additional_data={"num_adapters": len(adapters)}
+                )
+                self.error_handler.handle_error(e, error_context)
+                
+                # Record failed query metrics
+                self.performance_monitor.metrics_collector.increment_counter("queries_failed")
+                
+                # Try graceful degradation
+                try:
+                    available_engines = [adapter.engine_id for adapter in adapters if adapter.is_healthy]
+                    result = await self.degradation_manager.handle_degraded_query(
+                        query, available_engines, fusion_engine=self.fusion_engine
+                    )
+                    
+                    # Record degraded query metrics
+                    self.performance_monitor.metrics_collector.increment_counter("queries_degraded")
+                    return result
+                    
+                except Exception as degradation_error:
+                    logger.error(f"Graceful degradation also failed: {degradation_error}")
+                    self.performance_monitor.metrics_collector.increment_counter("queries_completely_failed")
+                    raise FusionFactoryError(
+                        f"Query processing failed and graceful degradation unsuccessful: {str(e)}"
+                    ) from e
     
     async def _process_query_internal(self, query: str, adapters: List[SearchEngineAdapter],
                                     weights: Optional[np.ndarray], limit: int) -> RankedResults:

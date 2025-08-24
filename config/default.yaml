@@ -95,6 +95,41 @@ monitoring:
   performance_tracking: true
   memory_profiling: false
   
+  # WandB Configuration
+  wandb:
+    enabled: true
+    project: "rag-fusion-factory"
+    entity: null  # Set to your WandB entity/username
+    tags: ["monitoring", "performance"]
+    log_frequency: 100  # Log metrics every N operations
+    
+  # Prometheus Configuration
+  prometheus:
+    enabled: true
+    port: 9090
+    endpoint: "/metrics"
+    
+  # Health Check Configuration
+  health_checks:
+    enabled: true
+    interval: 30  # seconds
+    timeout: 10  # seconds
+    endpoints:
+      - "/health"
+      - "/health/engines"
+      - "/health/detailed"
+    
+  # Performance Metrics
+  metrics:
+    query_latency: true
+    engine_response_times: true
+    fusion_accuracy: true
+    memory_usage: true
+    cpu_usage: true
+    error_rates: true
+    throughput: true
+    cache_hit_rates: true
+  
 # Circuit Breaker Configuration
 circuit_breaker:
   failure_threshold: 5
