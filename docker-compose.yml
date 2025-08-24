@@ -1,0 +1,69 @@
+# Docker Compose configuration for RAG Fusion Factory
+# This is the main production deployment configuration
+# Users typically connect to existing external search engines
+
+version: '3.8'
+
+services:
+  # RAG Fusion Factory main service
+  rag-fusion-factory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: rag-fusion-factory
+    environment:
+      - ENVIRONMENT=production
+      - CONFIG_FILE=/app/config/default.yaml
+      - LOG_LEVEL=INFO
+      # External search engine connections (configure as needed)
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST:-your-elasticsearch-host}
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME:-}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
+      - SOLR_HOST=${SOLR_HOST:-your-solr-host}
+      - SOLR_PORT=${SOLR_PORT:-8983}
+      - OPENSEARCH_HOST=${OPENSEARCH_HOST:-your-opensearch-host}
+      - OPENSEARCH_PORT=${OPENSEARCH_PORT:-9200}
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME:-}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD:-}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - fusion-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.path.insert(0, '/app/src'); from src.adapters.registry import get_adapter_registry; import asyncio; registry = get_adapter_registry(); result = asyncio.run(registry.health_check_all()); healthy = sum(1 for h in result.values() if h); exit(0 if healthy > 0 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Redis for caching (lightweight service)
+  redis:
+    image: redis:7-alpine
+    container_name: rag-fusion-redis
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - fusion-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  fusion-network:
+    driver: bridge

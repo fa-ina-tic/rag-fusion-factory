@@ -1,26 +1,81 @@
-# Development Environment Configuration
-# This file overrides default.yaml settings for development
-
-api:
-  debug: true
-  reload: true
-  port: 8001
+# Development configuration for RAG Fusion Factory
+# This configuration is used for local development and testing with Docker services
 
 logging:
-  level: "DEBUG"
-  file_logging: true
+  level: DEBUG
+  format: text
 
-model:
-  xgboost:
-    n_estimators: 50  # Smaller for faster training during development
+# Development engines - these connect to local Docker services for testing
+engines:
+  # Local Elasticsearch for testing
+  - engine_type: elasticsearch
+    engine_id: dev_elasticsearch
+    timeout: 15.0
+    config:
+      host: "elasticsearch"  # Docker service name
+      port: 9200
+      index: "dev_documents"
+      use_ssl: false
 
-training:
-  batch_size: 16  # Smaller batch size for development
-  max_epochs: 20
+  # Local Solr for testing
+  - engine_type: solr
+    engine_id: dev_solr
+    timeout: 15.0
+    config:
+      host: "solr"  # Docker service name
+      port: 8983
+      core: "dev_documents"
+      use_ssl: false
 
-hyperparameter_optimization:
-  max_trials: 10  # Fewer trials for faster development cycles
-  timeout: 600  # 10 minutes
+  # Local OpenSearch for testing
+  - engine_type: opensearch
+    engine_id: dev_opensearch
+    timeout: 15.0
+    config:
+      host: "opensearch"  # Docker service name
+      port: 9200
+      index: "dev_documents"
+      use_ssl: false
+      verify_ssl: false
 
+  # Database adapter for testing
+  - engine_type: database
+    engine_id: dev_database
+    timeout: 15.0
+    config:
+      connection_string: "postgresql://fusion_user:fusion_password@postgres:5432/fusion_db"
+      table_name: "documents"
+      id_column: "doc_id"
+      content_columns: ["title", "content"]
+      score_method: "match_count"
+      search_type: "fulltext"
+
+  # Mock adapters for fallback
+  - engine_type: mock_inmemory
+    engine_id: dev_mock_fallback
+    timeout: 5.0
+    config:
+      response_delay: 0.1
+      failure_rate: 0.1  # Simulate some failures for testing
+      max_results: 5
+      documents:
+        - id: dev_1
+          title: "Development Document 1"
+          content: "This is a development test document for local testing"
+          category: "development"
+        - id: dev_2
+          title: "Development Document 2"
+          content: "Another development document to test search functionality"
+          category: "development"
+
+# Development fusion settings
+fusion:
+  default_limit: 5
+  max_limit: 20
+  timeout: 30.0
+  
+# Development monitoring
 monitoring:
-  memory_profiling: true
+  enabled: true
+  health_check_interval: 10
+  metrics_collection: true

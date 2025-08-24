@@ -1,0 +1,79 @@
+# Production configuration example for RAG Fusion Factory
+# Copy this file and customize it for your production environment
+# This shows how to configure external search engines
+
+logging:
+  level: INFO
+  format: json
+
+# Production engines - configure these to point to your actual search engines
+engines:
+  # Primary Elasticsearch cluster
+  - engine_type: elasticsearch
+    engine_id: prod_elasticsearch_primary
+    timeout: 30.0
+    config:
+      host: "${ELASTICSEARCH_HOST}"  # e.g., your-elasticsearch-cluster.com
+      port: "${ELASTICSEARCH_PORT}"  # e.g., 9200 or 443
+      index: "production_documents"
+      username: "${ELASTICSEARCH_USERNAME}"
+      password: "${ELASTICSEARCH_PASSWORD}"
+      use_ssl: true
+      verify_ssl: true
+
+  # Secondary Solr cluster
+  - engine_type: solr
+    engine_id: prod_solr_secondary
+    timeout: 30.0
+    config:
+      host: "${SOLR_HOST}"  # e.g., your-solr-cluster.com
+      port: "${SOLR_PORT}"  # e.g., 8983 or 443
+      core: "production_documents"
+      username: "${SOLR_USERNAME}"
+      password: "${SOLR_PASSWORD}"
+      use_ssl: true
+
+  # OpenSearch cluster (if using)
+  - engine_type: opensearch
+    engine_id: prod_opensearch_backup
+    timeout: 30.0
+    config:
+      host: "${OPENSEARCH_HOST}"  # e.g., your-opensearch-cluster.com
+      port: "${OPENSEARCH_PORT}"  # e.g., 9200 or 443
+      index: "production_documents"
+      username: "${OPENSEARCH_USERNAME}"
+      password: "${OPENSEARCH_PASSWORD}"
+      use_ssl: true
+      verify_ssl: true
+
+  # Custom REST API (if you have one)
+  - engine_type: rest_api
+    engine_id: prod_custom_api
+    timeout: 30.0
+    config:
+      base_url: "${CUSTOM_API_URL}"  # e.g., https://your-search-api.com
+      search_endpoint: "/api/v1/search"
+      health_endpoint: "/api/v1/health"
+      query_param: "query"
+      limit_param: "limit"
+      headers:
+        "X-API-Key": "${CUSTOM_API_KEY}"
+        "Content-Type": "application/json"
+      response_format: "json"
+      result_path: "data.results"
+      id_field: "id"
+      score_field: "score"
+      content_field: "content"
+
+# Fusion configuration for production
+fusion:
+  default_limit: 20
+  max_limit: 100
+  timeout: 60.0
+  
+# Production monitoring
+monitoring:
+  enabled: true
+  health_check_interval: 30
+  metrics_collection: true
+  alert_on_failures: true

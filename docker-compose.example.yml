@@ -1,0 +1,96 @@
+# Example Docker Compose file showing how users can integrate their own search engines
+# Copy this file and modify it according to your search engine setup
+
+version: '3.8'
+
+services:
+  # RAG Fusion Factory main service
+  rag-fusion-factory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: rag-fusion-factory
+    environment:
+      - ENVIRONMENT=production
+      - CONFIG_FILE=/app/config/production.yaml
+      - LOG_LEVEL=INFO
+      # Configure your search engine connections
+      - ELASTICSEARCH_HOST=your-elasticsearch-host
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_USERNAME=your-username
+      - ELASTICSEARCH_PASSWORD=your-password
+      - SOLR_HOST=your-solr-host
+      - SOLR_PORT=8983
+      - OPENSEARCH_HOST=your-opensearch-host
+      - OPENSEARCH_PORT=9200
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - fusion-network
+    restart: unless-stopped
+
+  # Example: Your own Elasticsearch cluster
+  # Replace this with your actual search engine setup
+  your-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: your-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=your-secure-password
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    volumes:
+      - your-elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - fusion-network
+    restart: unless-stopped
+
+  # Example: Your own Solr instance
+  your-solr:
+    image: solr:9.4
+    container_name: your-solr
+    environment:
+      - SOLR_HEAP=1g
+    volumes:
+      - your-solr-data:/var/solr
+    ports:
+      - "8983:8983"
+    networks:
+      - fusion-network
+    restart: unless-stopped
+
+  # Example: Your own OpenSearch cluster
+  your-opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: your-opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=false
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=your-secure-password
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+    volumes:
+      - your-opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9201:9200"
+    networks:
+      - fusion-network
+    restart: unless-stopped
+
+volumes:
+  your-elasticsearch-data:
+    driver: local
+  your-solr-data:
+    driver: local
+  your-opensearch-data:
+    driver: local
+
+networks:
+  fusion-network:
+    driver: bridge

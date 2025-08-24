@@ -1,0 +1,63 @@
+# Minimal configuration for RAG Fusion Factory
+# This configuration uses mock adapters for immediate testing without external dependencies
+
+logging:
+  level: INFO
+  format: text
+
+engines:
+  # Mock adapters for testing without external dependencies
+  - engine_type: mock_inmemory
+    engine_id: minimal_mock_1
+    timeout: 5.0
+    config:
+      response_delay: 0.1
+      failure_rate: 0.0
+      max_results: 10
+      documents:
+        - id: doc1
+          title: "Introduction to RAG Fusion Factory"
+          content: "RAG Fusion Factory is an automated system for optimizing the combination of multiple information retrieval methods through machine learning-based weight tuning."
+          category: "documentation"
+          tags: ["rag", "fusion", "ml"]
+        
+        - id: doc2
+          title: "Machine Learning Weight Optimization"
+          content: "The system uses contrastive learning and XGBoost-based models to learn optimal weight combinations for different retrieval methods."
+          category: "technical"
+          tags: ["machine-learning", "optimization", "xgboost"]
+        
+        - id: doc3
+          title: "Search Engine Integration"
+          content: "Multiple search engines can be integrated through standardized adapters, including Elasticsearch, Solr, and custom APIs."
+          category: "integration"
+          tags: ["search-engines", "adapters", "integration"]
+
+  - engine_type: mock_inmemory
+    engine_id: minimal_mock_2
+    timeout: 5.0
+    config:
+      response_delay: 0.2
+      failure_rate: 0.05
+      max_results: 8
+      documents:
+        - id: doc4
+          title: "Automated Hyperparameter Tuning"
+          content: "The system provides hyperparameter tuning capabilities similar to W&B Weave for optimizing performance automatically."
+          category: "automation"
+          tags: ["hyperparameters", "tuning", "automation"]
+        
+        - id: doc5
+          title: "FastAPI Interface"
+          content: "A FastAPI-based interface provides REST endpoints for search queries and system management."
+          category: "api"
+          tags: ["fastapi", "rest", "api"]
+
+fusion:
+  default_limit: 10
+  max_limit: 100
+  timeout: 30.0
+
+monitoring:
+  enabled: true
+  health_check_interval: 30

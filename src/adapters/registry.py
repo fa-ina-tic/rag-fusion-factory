@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional, Type, Union
 from .base import SearchEngineAdapter
 from .elasticsearch_adapter import ElasticsearchAdapter
 from .solr_adapter import SolrAdapter
+from .opensearch_adapter import OpenSearchAdapter
+from .mock_adapter import InMemoryMockAdapter, FileMockAdapter
+from .custom_adapter import RestApiAdapter, DatabaseAdapter, WebScrapingAdapter
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +32,13 @@ class AdapterRegistry:
         """Register built-in search engine adapters."""
         self.register_adapter('elasticsearch', ElasticsearchAdapter)
         self.register_adapter('solr', SolrAdapter)
-        logger.info("Registered built-in adapters: elasticsearch, solr")
+        self.register_adapter('opensearch', OpenSearchAdapter)
+        self.register_adapter('mock_inmemory', InMemoryMockAdapter)
+        self.register_adapter('mock_file', FileMockAdapter)
+        self.register_adapter('rest_api', RestApiAdapter)
+        self.register_adapter('database', DatabaseAdapter)
+        self.register_adapter('web_scraping', WebScrapingAdapter)
+        logger.info("Registered built-in adapters: elasticsearch, solr, opensearch, mock_inmemory, mock_file, rest_api, database, web_scraping")
     
     def register_adapter(self, engine_type: str, adapter_class: Type[SearchEngineAdapter]) -> None:
         """Register a search engine adapter class.

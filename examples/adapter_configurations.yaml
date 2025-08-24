@@ -1,0 +1,252 @@
+# Example configurations for different search engine adapters
+# This file demonstrates how to configure various types of search engines
+# for use with the RAG Fusion Factory
+
+# Elasticsearch Configuration
+elasticsearch_example:
+  engine_type: elasticsearch
+  engine_id: es_primary
+  timeout: 30.0
+  config:
+    host: localhost
+    port: 9200
+    index: documents
+    username: elastic  # Optional
+    password: changeme  # Optional
+    use_ssl: false
+
+# Solr Configuration
+solr_example:
+  engine_type: solr
+  engine_id: solr_primary
+  timeout: 30.0
+  config:
+    host: localhost
+    port: 8983
+    core: documents
+    username: solr  # Optional
+    password: SolrRocks  # Optional
+    use_ssl: false
+
+# OpenSearch Configuration
+opensearch_example:
+  engine_type: opensearch
+  engine_id: opensearch_primary
+  timeout: 30.0
+  config:
+    host: localhost
+    port: 9200
+    index: documents
+    username: admin  # Optional
+    password: admin  # Optional
+    use_ssl: true
+    verify_ssl: false  # For development only
+
+# In-Memory Mock Configuration (for testing)
+mock_inmemory_example:
+  engine_type: mock_inmemory
+  engine_id: mock_test
+  timeout: 10.0
+  config:
+    response_delay: 0.1
+    failure_rate: 0.0
+    max_results: 20
+    documents:
+      - id: doc1
+        title: "Machine Learning Basics"
+        content: "Introduction to machine learning concepts and algorithms"
+        category: "education"
+        tags: ["ml", "ai", "learning"]
+      - id: doc2
+        title: "Python Programming"
+        content: "Comprehensive guide to Python programming language"
+        category: "programming"
+        tags: ["python", "coding", "development"]
+      - id: doc3
+        title: "Data Science Tools"
+        content: "Overview of popular data science tools and libraries"
+        category: "data-science"
+        tags: ["data", "science", "tools"]
+
+# File-Based Mock Configuration (for testing with external data)
+mock_file_example:
+  engine_type: mock_file
+  engine_id: mock_file_test
+  timeout: 10.0
+  config:
+    data_file: "examples/sample_documents.json"
+    response_delay: 0.2
+    failure_rate: 0.05
+    max_results: 15
+
+# REST API Configuration (for custom APIs)
+rest_api_example:
+  engine_type: rest_api
+  engine_id: custom_api
+  timeout: 30.0
+  config:
+    base_url: "https://api.example.com"
+    search_endpoint: "/v1/search"
+    health_endpoint: "/v1/health"
+    query_param: "query"
+    limit_param: "max_results"
+    headers:
+      "X-API-Key": "your-api-key-here"
+      "Content-Type": "application/json"
+    auth_token: "bearer-token-here"  # Optional
+    response_format: "json"
+    result_path: "data.results"
+    id_field: "document_id"
+    score_field: "relevance_score"
+    content_field: "text_content"
+
+# Database Configuration (for SQL-based search)
+database_example:
+  engine_type: database
+  engine_id: postgres_search
+  timeout: 30.0
+  config:
+    connection_string: "postgresql://user:password@localhost:5432/searchdb"
+    table_name: "documents"
+    id_column: "doc_id"
+    content_columns: ["title", "content", "description"]
+    score_method: "match_count"
+    search_type: "fulltext"
+
+# Web Scraping Configuration (for websites without APIs)
+web_scraping_example:
+  engine_type: web_scraping
+  engine_id: web_scraper
+  timeout: 45.0
+  config:
+    search_url: "https://example.com/search?q={query}&limit={limit}"
+    result_selector: ".search-result"
+    title_selector: ".result-title"
+    content_selector: ".result-snippet"
+    link_selector: ".result-link"
+    headers:
+      "User-Agent": "Mozilla/5.0 (compatible; RAG-Fusion-Factory/1.0)"
+      "Accept": "text/html,application/xhtml+xml"
+
+# Multi-Engine Configuration Example
+multi_engine_setup:
+  engines:
+    - engine_type: elasticsearch
+      engine_id: es_main
+      timeout: 30.0
+      config:
+        host: es-cluster-1.example.com
+        port: 9200
+        index: primary_docs
+        use_ssl: true
+        username: search_user
+        password: secure_password
+    
+    - engine_type: solr
+      engine_id: solr_backup
+      timeout: 30.0
+      config:
+        host: solr-cluster.example.com
+        port: 8983
+        core: backup_docs
+        use_ssl: true
+    
+    - engine_type: mock_inmemory
+      engine_id: fallback_mock
+      timeout: 5.0
+      config:
+        response_delay: 0.05
+        failure_rate: 0.0
+        max_results: 10
+
+# Production Configuration Example
+production_setup:
+  engines:
+    - engine_type: opensearch
+      engine_id: prod_opensearch
+      timeout: 20.0
+      config:
+        host: opensearch.prod.example.com
+        port: 443
+        index: production_documents
+        use_ssl: true
+        verify_ssl: true
+        username: prod_search_user
+        password: "${OPENSEARCH_PASSWORD}"  # Environment variable
+    
+    - engine_type: elasticsearch
+      engine_id: prod_elasticsearch
+      timeout: 20.0
+      config:
+        host: elasticsearch.prod.example.com
+        port: 443
+        index: production_index
+        use_ssl: true
+        username: "${ES_USERNAME}"
+        password: "${ES_PASSWORD}"
+
+# Development Configuration Example
+development_setup:
+  engines:
+    - engine_type: mock_inmemory
+      engine_id: dev_mock_1
+      timeout: 5.0
+      config:
+        response_delay: 0.1
+        failure_rate: 0.1  # Simulate some failures
+        max_results: 5
+    
+    - engine_type: mock_file
+      engine_id: dev_mock_2
+      timeout: 5.0
+      config:
+        data_file: "tests/fixtures/test_documents.json"
+        response_delay: 0.2
+        failure_rate: 0.05
+        max_results: 10
+    
+    - engine_type: elasticsearch
+      engine_id: dev_elasticsearch
+      timeout: 15.0
+      config:
+        host: localhost
+        port: 9200
+        index: dev_documents
+        use_ssl: false
+
+# Testing Configuration Example
+testing_setup:
+  engines:
+    - engine_type: mock_inmemory
+      engine_id: test_engine_1
+      timeout: 1.0
+      config:
+        response_delay: 0.01
+        failure_rate: 0.0
+        max_results: 3
+        documents:
+          - id: test1
+            title: "Test Document 1"
+            content: "This is a test document for unit testing"
+            category: "test"
+          - id: test2
+            title: "Test Document 2"
+            content: "Another test document with different content"
+            category: "test"
+    
+    - engine_type: mock_inmemory
+      engine_id: test_engine_2
+      timeout: 1.0
+      config:
+        response_delay: 0.01
+        failure_rate: 0.0
+        max_results: 3
+        documents:
+          - id: test3
+            title: "Test Document 3"
+            content: "Third test document for multi-engine testing"
+            category: "test"
+          - id: test4
+            title: "Test Document 4"
+            content: "Fourth test document with unique content"
+            category: "test"

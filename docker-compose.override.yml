@@ -1,0 +1,18 @@
+# Development override file
+# This file is automatically loaded by docker-compose for development
+
+version: '3.8'
+
+services:
+  rag-fusion-factory:
+    environment:
+      - ENVIRONMENT=development
+      - CONFIG_FILE=/app/config/development.yaml
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - .:/app:ro  # Mount source code for development
+    command: ["--dev"]
+
+  # For development, always include the reference Elasticsearch
+  elasticsearch:
+    profiles: []  # Remove profile restriction for development

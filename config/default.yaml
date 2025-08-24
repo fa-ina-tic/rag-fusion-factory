@@ -1,137 +1,68 @@
-# RAG Fusion Factory Default Configuration
+# Default configuration for RAG Fusion Factory
+# This configuration uses mock adapters by default
+# Users should override this with their own configuration pointing to external search engines
 
-# API Configuration
-api:
-  host: "0.0.0.0"
-  port: 8000
-  debug: false
-  workers: 1
-  reload: false
-
-# Search Engine Configuration
-search:
-  timeout: 30.0
-  max_concurrent_engines: 10
-  retry_attempts: 3
-  retry_delay: 1.0
-
-# Model Configuration
-model:
-  cache_dir: "./models"
-  auto_save: true
-  version_control: true
-  
-  # XGBoost Configuration
-  xgboost:
-    n_estimators: 100
-    max_depth: 6
-    learning_rate: 0.1
-    random_state: 42
-    n_jobs: -1
-    subsample: 0.8
-    colsample_bytree: 0.8
-    reg_alpha: 0.1
-    reg_lambda: 1.0
-
-# Normalization Configuration
-normalization:
-  default_method: "min_max"  # Options: min_max, z_score, quantile
-  outlier_threshold: 2.5
-  clip_values: true
-  per_engine_params: true
-
-# Logging Configuration
 logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  file_logging: false
-  log_file: "logs/rag_fusion_factory.log"
-  max_file_size: "10MB"
-  backup_count: 5
+  level: INFO
+  format: json
 
-# Training Configuration
-training:
-  batch_size: 32
-  validation_split: 0.2
-  max_epochs: 100
-  early_stopping_patience: 10
-  learning_rate: 0.001
+# Default engines - using mock adapters for immediate functionality
+# Users should replace these with their actual search engine configurations
+engines:
+  - engine_type: mock_inmemory
+    engine_id: default_mock_1
+    timeout: 5.0
+    config:
+      response_delay: 0.1
+      failure_rate: 0.0
+      max_results: 10
+      documents:
+        - id: welcome_1
+          title: "Welcome to RAG Fusion Factory"
+          content: "RAG Fusion Factory is a system for combining multiple search engines to improve retrieval quality. Configure your own search engines by editing the configuration file."
+          category: "system"
+          tags: ["welcome", "introduction"]
+        
+        - id: config_1
+          title: "Configuration Guide"
+          content: "To configure your search engines, edit the engines section in your configuration file. Supported engines include Elasticsearch, Solr, OpenSearch, and custom REST APIs."
+          category: "documentation"
+          tags: ["configuration", "setup"]
+        
+        - id: example_1
+          title: "Example Search Document"
+          content: "This is an example document to demonstrate search functionality. Replace the mock adapters with your actual search engine configurations."
+          category: "example"
+          tags: ["example", "demo"]
+
+  - engine_type: mock_inmemory
+    engine_id: default_mock_2
+    timeout: 5.0
+    config:
+      response_delay: 0.15
+      failure_rate: 0.0
+      max_results: 8
+      documents:
+        - id: adapter_1
+          title: "Available Adapters"
+          content: "RAG Fusion Factory supports Elasticsearch, Solr, OpenSearch, database adapters, REST API adapters, and custom implementations."
+          category: "adapters"
+          tags: ["adapters", "engines"]
+        
+        - id: fusion_1
+          title: "Fusion Strategies"
+          content: "The system combines results from multiple search engines using various fusion strategies to improve overall search quality and coverage."
+          category: "fusion"
+          tags: ["fusion", "ranking"]
+
+# Fusion configuration
+fusion:
+  default_limit: 10
+  max_limit: 100
+  timeout: 30.0
   
-  # Contrastive Learning
-  contrastive_learning:
-    margin: 1.0
-    temperature: 0.1
-    negative_sampling_ratio: 5
-    loss_function: "triplet"  # Options: triplet, contrastive, ranking
-
-# Hyperparameter Optimization
-hyperparameter_optimization:
-  enabled: true
-  method: "bayesian"  # Options: grid, random, bayesian
-  max_trials: 50
-  timeout: 3600  # seconds
-  
-  # Search spaces
-  search_space:
-    xgboost:
-      n_estimators: [50, 100, 200, 300]
-      max_depth: [3, 6, 9, 12]
-      learning_rate: [0.01, 0.1, 0.2, 0.3]
-      subsample: [0.8, 0.9, 1.0]
-    
-    normalization:
-      method: ["min_max", "z_score", "quantile"]
-      outlier_threshold: [2.0, 2.5, 3.0]
-    
-    contrastive_learning:
-      margin: [0.5, 1.0, 1.5, 2.0]
-      temperature: [0.05, 0.1, 0.2, 0.3]
-      negative_sampling_ratio: [3, 5, 7, 10]
-
-# Performance Monitoring
+# Monitoring configuration
 monitoring:
   enabled: true
-  metrics_collection_interval: 60  # seconds
-  performance_tracking: true
-  memory_profiling: false
-  
-  # WandB Configuration
-  wandb:
-    enabled: true
-    project: "rag-fusion-factory"
-    entity: null  # Set to your WandB entity/username
-    tags: ["monitoring", "performance"]
-    log_frequency: 100  # Log metrics every N operations
-    
-  # Prometheus Configuration
-  prometheus:
-    enabled: true
-    port: 9090
-    endpoint: "/metrics"
-    
-  # Health Check Configuration
-  health_checks:
-    enabled: true
-    interval: 30  # seconds
-    timeout: 10  # seconds
-    endpoints:
-      - "/health"
-      - "/health/engines"
-      - "/health/detailed"
-    
-  # Performance Metrics
-  metrics:
-    query_latency: true
-    engine_response_times: true
-    fusion_accuracy: true
-    memory_usage: true
-    cpu_usage: true
-    error_rates: true
-    throughput: true
-    cache_hit_rates: true
-  
-# Circuit Breaker Configuration
-circuit_breaker:
-  failure_threshold: 5
-  recovery_timeout: 30
-  expected_exception_types: ["TimeoutError", "ConnectionError"]
+  health_check_interval: 30
+  metrics_collection: true

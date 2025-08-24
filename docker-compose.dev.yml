@@ -1,0 +1,165 @@
+# Docker Compose configuration for development and testing
+# This file includes search engines for end-to-end testing purposes only
+# Use this for development, testing, and CI/CD pipelines
+
+version: '3.8'
+
+services:
+  # RAG Fusion Factory main service
+  rag-fusion-factory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: rag-fusion-factory-dev
+    environment:
+      - ENVIRONMENT=development
+      - CONFIG_FILE=/app/config/development.yaml
+      - LOG_LEVEL=DEBUG
+      # Local test search engines
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_USERNAME=
+      - ELASTICSEARCH_PASSWORD=
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - OPENSEARCH_USERNAME=
+      - OPENSEARCH_PASSWORD=
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=fusion_user
+      - POSTGRES_PASSWORD=fusion_password
+      - POSTGRES_DB=fusion_db
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - .:/app:ro  # Mount source code for development
+    ports:
+      - "8000:8000"
+    depends_on:
+      - elasticsearch
+      - solr
+      - opensearch
+      - postgres
+    networks:
+      - fusion-dev-network
+    restart: unless-stopped
+
+  # Test Elasticsearch service
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch-dev
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+    volumes:
+      - elasticsearch-dev-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - fusion-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Test Solr service
+  solr:
+    image: solr:9.4
+    container_name: solr-dev
+    environment:
+      - SOLR_HEAP=256m
+    volumes:
+      - solr-dev-data:/var/solr
+    ports:
+      - "8983:8983"
+    networks:
+      - fusion-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8983/solr/admin/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Test OpenSearch service
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch-dev
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m"
+    volumes:
+      - opensearch-dev-data:/usr/share/opensearch/data
+    ports:
+      - "9201:9200"
+    networks:
+      - fusion-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Test PostgreSQL service (for database adapter testing)
+  postgres:
+    image: postgres:15
+    container_name: postgres-dev
+    environment:
+      - POSTGRES_USER=fusion_user
+      - POSTGRES_PASSWORD=fusion_password
+      - POSTGRES_DB=fusion_db
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - fusion-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fusion_user -d fusion_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis for caching tests
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    volumes:
+      - redis-dev-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - fusion-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  elasticsearch-dev-data:
+    driver: local
+  solr-dev-data:
+    driver: local
+  opensearch-dev-data:
+    driver: local
+  postgres-dev-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+
+networks:
+  fusion-dev-network:
+    driver: bridge
