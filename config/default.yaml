@@ -61,6 +61,19 @@ fusion:
   max_limit: 100
   timeout: 30.0
   
+# Search configuration
+search:
+  default_timeout: 30.0
+  max_concurrent_queries: 10
+  retry_attempts: 3
+  retry_delay: 1.0
+
+# Normalization configuration
+normalization:
+  method: min_max
+  outlier_detection: true
+  outlier_threshold: 2.0
+
 # Monitoring configuration
 monitoring:
   enabled: true

@@ -45,6 +45,9 @@ def setup_logging(
         logger.removeHandler(handler)
     
     # Create formatter
+    if log_format.lower() == "json":
+        # Use a standard format for JSON-style logging
+        log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     formatter = logging.Formatter(log_format)
     
     # Create console handler

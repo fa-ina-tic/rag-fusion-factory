@@ -199,9 +199,6 @@ xgb_params = get_xgboost_config()
 ## 📞 지원
 
 - **이슈 리포팅**: [GitHub Issues](https://github.com/your-username/rag-fusion-factory/issues)
-- **문서**: [Wiki](https://github.com/your-username/rag-fusion-factory/wiki)
 - **설정 가이드**: [config/README.md](config/README.md)
 
 ---
-
-**RAG Fusion Factory**로 검색의 새로운 차원을 경험해보세요! 🚀
