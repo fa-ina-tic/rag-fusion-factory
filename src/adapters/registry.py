@@ -9,6 +9,8 @@ from .solr_adapter import SolrAdapter
 from .opensearch_adapter import OpenSearchAdapter
 from .mock_adapter import InMemoryMockAdapter, FileMockAdapter
 from .custom_adapter import RestApiAdapter, DatabaseAdapter, WebScrapingAdapter
+from .bm25_adapter import BM25Adapter
+from .tfidf_adapter import TFIDFAdapter
 
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,9 @@ class AdapterRegistry:
         self.register_adapter('rest_api', RestApiAdapter)
         self.register_adapter('database', DatabaseAdapter)
         self.register_adapter('web_scraping', WebScrapingAdapter)
-        logger.info("Registered built-in adapters: elasticsearch, solr, opensearch, mock_inmemory, mock_file, rest_api, database, web_scraping")
+        self.register_adapter('bm25', BM25Adapter)
+        self.register_adapter('tfidf', TFIDFAdapter)
+        logger.info("Registered built-in adapters: elasticsearch, solr, opensearch, mock_inmemory, mock_file, rest_api, database, web_scraping, bm25, tfidf")
     
     def register_adapter(self, engine_type: str, adapter_class: Type[SearchEngineAdapter]) -> None:
         """Register a search engine adapter class.
