@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Demo script to find optimal weight combinations for BM25 and TF-IDF engines
-using dummy data and ground truth labels.
+Demo script to find optimal weight combinations for BM25 and TF-IDF engines.
 """
 
 import asyncio
@@ -10,12 +9,6 @@ import numpy as np
 import sys
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
-try:
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    PLOTTING_AVAILABLE = True
-except ImportError:
-    PLOTTING_AVAILABLE = False
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -23,10 +16,7 @@ sys.path.insert(0, str(project_root))
 
 from src.services.fusion_factory import FusionFactory
 from src.adapters.registry import AdapterRegistry
-from src.models.core import TrainingExample, SearchResults
-from src.models.weight_predictor import WeightPredictorModel
-from src.models.contrastive_learning import ContrastiveLearningModule
-from src.services.training_pipeline import ModelTrainingPipeline
+from src.models.core import TrainingExample
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -438,84 +428,30 @@ def grid_search_weights(training_examples: List[TrainingExample], num_engines: i
     return best_weights, best_score, results
 
 
-async def train_ml_models(training_examples: List[TrainingExample]) -> Dict[str, Any]:
-    """Train ML models for weight prediction."""
-    logger.info("Training ML models for weight prediction...")
-    
-    # Train XGBoost weight predictor
-    weight_predictor = WeightPredictorModel()
-    weight_predictor.train_model(training_examples)
-    
-    # Train with contrastive learning
-    cl_module = ContrastiveLearningModule()
-    
-    # Use training pipeline for comprehensive training
-    pipeline = ModelTrainingPipeline()
-    training_results = pipeline.train_model_with_validation(training_examples)
-    
-    return {
-        'weight_predictor': weight_predictor,
-        'contrastive_learning': cl_module,
-        'training_results': training_results
+def save_results(grid_results: List[Tuple[np.ndarray, float]], best_weights: np.ndarray, best_score: float, num_documents: int, num_queries: int):
+    """Save optimization results to JSON file."""
+    results_data = {
+        'optimal_weights': {
+            'bm25': float(best_weights[0]),
+            'tfidf': float(best_weights[1])
+        },
+        'best_ndcg_score': float(best_score),
+        'num_documents': num_documents,
+        'num_queries': num_queries,
+        'grid_search_results': [
+            {
+                'bm25_weight': float(weights[0]),
+                'tfidf_weight': float(weights[1]),
+                'ndcg_score': float(score)
+            }
+            for weights, score in grid_results
+        ]
     }
-
-
-def visualize_results(grid_results: List[Tuple[np.ndarray, float]], best_weights: np.ndarray, best_score: float):
-    """Visualize the weight optimization results."""
-    if not PLOTTING_AVAILABLE:
-        logger.info("Matplotlib/Seaborn not available, skipping visualization")
-        return
     
-    try:
-        # Extract weights and scores
-        w1_values = [weights[0] for weights, _ in grid_results]
-        w2_values = [weights[1] for weights, _ in grid_results]
-        scores = [score for _, score in grid_results]
-        
-        # Create visualization
-        plt.figure(figsize=(12, 5))
-        
-        # Plot 1: Weight combinations vs scores
-        plt.subplot(1, 2, 1)
-        scatter = plt.scatter(w1_values, scores, c=scores, cmap='viridis', alpha=0.7)
-        plt.colorbar(scatter, label='NDCG Score')
-        plt.axvline(x=best_weights[0], color='red', linestyle='--', alpha=0.7, label=f'Best: {best_weights[0]:.2f}')
-        plt.xlabel('BM25 Weight')
-        plt.ylabel('NDCG Score')
-        plt.title('Weight Optimization Results')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Plot 2: Heatmap of weight combinations
-        plt.subplot(1, 2, 2)
-        # Create a grid for heatmap
-        w1_grid = np.linspace(0, 1, 11)
-        w2_grid = np.linspace(0, 1, 11)
-        score_grid = np.zeros((len(w2_grid), len(w1_grid)))
-        
-        for weights, score in grid_results:
-            w1_idx = int(round(weights[0] * 10))
-            w2_idx = int(round(weights[1] * 10))
-            if 0 <= w1_idx < len(w1_grid) and 0 <= w2_idx < len(w2_grid):
-                score_grid[w2_idx, w1_idx] = score
-        
-        sns.heatmap(score_grid, xticklabels=[f'{w:.1f}' for w in w1_grid], 
-                   yticklabels=[f'{w:.1f}' for w in w2_grid[::-1]], 
-                   annot=True, fmt='.3f', cmap='viridis')
-        plt.xlabel('BM25 Weight')
-        plt.ylabel('TF-IDF Weight')
-        plt.title('Weight Combination Heatmap')
-        
-        plt.tight_layout()
-        plt.savefig('weight_optimization_results.png', dpi=300, bbox_inches='tight')
-        plt.show()
-        
-        logger.info("Visualization saved as 'weight_optimization_results.png'")
-        
-    except ImportError:
-        logger.warning("Matplotlib/Seaborn not available, skipping visualization")
-    except Exception as e:
-        logger.error(f"Error creating visualization: {e}")
+    with open('weight_optimization_results.json', 'w') as f:
+        json.dump(results_data, f, indent=2)
+    
+    logger.info("Results saved to 'weight_optimization_results.json'")
 
 
 async def main():
@@ -551,9 +487,6 @@ async def main():
     logger.info(f"NDCG Score:    {best_score:.4f}")
     logger.info(f"{'='*60}")
     
-    # Train ML models for comparison
-    ml_results = await train_ml_models(training_examples)
-    
     # Test the optimal weights with a few example queries
     logger.info("\nTesting optimal weights with example queries:")
     adapters = list(registry.get_all_adapters().values())
@@ -570,32 +503,8 @@ async def main():
         for i, result in enumerate(results.results[:3]):
             logger.info(f"  {i+1}. {result.document_id}: {result.relevance_score:.4f}")
     
-    # Visualize results
-    visualize_results(grid_results, best_weights, best_score)
-    
     # Save results
-    results_data = {
-        'optimal_weights': {
-            'bm25': float(best_weights[0]),
-            'tfidf': float(best_weights[1])
-        },
-        'best_ndcg_score': float(best_score),
-        'num_documents': len(documents),
-        'num_queries': len(queries_and_labels),
-        'grid_search_results': [
-            {
-                'bm25_weight': float(weights[0]),
-                'tfidf_weight': float(weights[1]),
-                'ndcg_score': float(score)
-            }
-            for weights, score in grid_results
-        ]
-    }
-    
-    with open('weight_optimization_results.json', 'w') as f:
-        json.dump(results_data, f, indent=2)
-    
-    logger.info("Results saved to 'weight_optimization_results.json'")
+    save_results(grid_results, best_weights, best_score, len(documents), len(queries_and_labels))
     logger.info("Weight optimization demo completed!")
 
 

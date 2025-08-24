@@ -242,45 +242,15 @@ class AdapterRegistry:
         
         return health_results
     
-    def get_adapter_info(self, engine_id: str) -> Optional[Dict[str, Any]]:
-        """Get detailed information about an adapter instance.
-        
-        Args:
-            engine_id: Unique identifier of the adapter instance
-            
-        Returns:
-            Dictionary containing adapter information, None if not found
-        """
-        adapter = self.get_adapter(engine_id)
-        if not adapter:
-            return None
-        
-        return {
-            'engine_id': adapter.engine_id,
-            'engine_type': adapter.__class__.__name__.replace('Adapter', '').lower(),
-            'configuration': adapter.get_configuration(),
-            'is_healthy': adapter.is_healthy,
-            'last_health_check': adapter.last_health_check.isoformat() if adapter.last_health_check else None,
-            'timeout': adapter.timeout
-        }
-    
     def get_registry_status(self) -> Dict[str, Any]:
         """Get overall registry status and statistics.
         
         Returns:
             Dictionary containing registry status information
         """
-        adapter_types = {}
-        for engine_id, adapter in self._instances.items():
-            adapter_type = adapter.__class__.__name__.replace('Adapter', '').lower()
-            if adapter_type not in adapter_types:
-                adapter_types[adapter_type] = []
-            adapter_types[adapter_type].append(engine_id)
-        
         return {
             'registered_types': list(self._adapters.keys()),
             'total_instances': len(self._instances),
-            'instances_by_type': adapter_types,
             'healthy_instances': sum(1 for adapter in self._instances.values() if adapter.is_healthy)
         }
 

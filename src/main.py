@@ -10,9 +10,8 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 from .utils.logging import setup_logging, get_logger
-from .config.settings import ConfigManager, get_api_config, get_logging_config
+from .config.settings import ConfigManager
 from .services.fusion_factory import FusionFactory
-from .adapters.registry import get_adapter_registry
 
 
 class RAGFusionFactory:
@@ -63,17 +62,17 @@ class RAGFusionFactory:
         """
         try:
             # Check required configuration sections
-            required_sections = ['api', 'search', 'model', 'normalization', 'logging', 'training']
+            required_sections = ['search', 'model', 'normalization', 'logging', 'training']
             for section in required_sections:
                 if section not in self.config:
                     self.logger.error(f"Missing required configuration section: {section}")
                     return False
             
-            # Validate API configuration
-            api_config = self.config.api
-            if not isinstance(api_config.port, int) or api_config.port <= 0:
-                self.logger.error("Invalid API port configuration")
-                return False
+            # Validate search configuration
+            if 'search' in self.config and hasattr(self.config.search, 'timeout'):
+                if self.config.search.timeout <= 0:
+                    self.logger.error("Invalid search timeout configuration")
+                    return False
             
             # Validate model cache directory
             cache_dir = Path(self.config.model.cache_dir)
@@ -98,10 +97,6 @@ class RAGFusionFactory:
     
     def log_configuration_info(self) -> None:
         """Log important configuration information."""
-        # Use instance-specific configuration instead of global
-        api_config = self.config.api
-        self.logger.info(f"Configuration loaded: API will run on {api_config.host}:{api_config.port}")
-        self.logger.info(f"Debug mode: {api_config.debug}")
         self.logger.info(f"Model cache directory: {self.config.model.cache_dir}")
         self.logger.info(f"Default normalization method: {self.config.normalization.default_method}")
         self.logger.info(f"Environment: {self.environment or 'default'}")
@@ -180,10 +175,7 @@ class RAGFusionFactory:
                 except Exception as e:
                     self.logger.warning(f"Failed to initialize adapters from config: {e}")
             
-            # TODO: This will be expanded in future tasks to include:
-            # - FastAPI server startup
-            # - Model loading
-            # - Training pipeline setup
+            # Core functionality ready - CLI-based RAG Fusion Factory
             
             self.logger.info("RAG Fusion Factory initialized successfully")
             self.logger.info("Core fusion engine ready for query processing")
@@ -243,29 +235,17 @@ For more information, visit: https://github.com/your-org/rag-fusion-factory
         help="Environment name (development, production, etc.)"
     )
     
-    # Future CLI commands (placeholders for upcoming tasks)
+    # CLI commands
     parser.add_argument(
         "--train",
         action="store_true",
-        help="Run training mode (to be implemented in task 10.1)"
+        help="Run training mode"
     )
     
     parser.add_argument(
         "--list-engines",
         action="store_true",
-        help="List configured search engines and their status (to be implemented in task 10.2)"
-    )
-    
-    parser.add_argument(
-        "--metrics",
-        action="store_true", 
-        help="Display performance metrics (to be implemented in task 10.2)"
-    )
-    
-    parser.add_argument(
-        "--optimize",
-        action="store_true",
-        help="Run hyperparameter optimization (to be implemented in task 10.2)"
+        help="List configured search engines and their status"
     )
     
     # Logging options
@@ -301,21 +281,13 @@ def main() -> int:
     parser = create_argument_parser()
     args = parser.parse_args()
     
-    # Handle future CLI commands (placeholders)
+    # Handle CLI commands
     if args.train:
-        print("Training mode will be implemented in task 10.1")
+        print("Training mode - use scripts/optimize_weights_demo.py for weight optimization")
         return 0
     
     if args.list_engines:
-        print("Engine listing will be implemented in task 10.2")
-        return 0
-    
-    if args.metrics:
-        print("Metrics display will be implemented in task 10.2")
-        return 0
-    
-    if args.optimize:
-        print("Hyperparameter optimization will be implemented in task 10.2")
+        print("Engine listing - check configuration files in config/ directory")
         return 0
     
     # Handle logging level overrides
